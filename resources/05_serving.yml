@@ -1,0 +1,160 @@
+# Camada de consumo — depende das tabelas gold/alertas existirem (fase 2 do deploy; ver scripts/deploy.sh):
+#   * Synced table Delta → Lakebase (fila operacional de baixa latência)
+#   * Genie space (perguntas em linguagem natural)
+#   * Databricks App (Radar do Hub)
+resources:
+  postgres_synced_tables:
+    alertas:
+      synced_table_id: ${var.catalog}.${var.schema}.alertas_lojistas_lakebase
+      source_table_full_name: ${var.catalog}.${var.schema}.alertas_lojistas
+      branch: ${resources.postgres_projects.radar_lakebase.name}/branches/production
+      postgres_database: ${var.lakebase_database}
+      primary_key_columns: [id_lojista]
+      scheduling_policy: TRIGGERED
+      create_database_objects_if_missing: true
+      new_pipeline_spec:
+        storage_catalog: ${var.catalog}
+        storage_schema: ${resources.schemas.radar_schema.name}
+
+  genie_spaces:
+    radar_genie:
+      title: Radar de Recebíveis — ${var.empresa}
+      description: >-
+        Pergunte em português sobre vazamento de TPV para concorrentes, risco da carteira de capital de giro,
+        valor em risco por hub/segmento e sinais dos atendimentos. Dados sintéticos de demonstração.
+      warehouse_id: ${var.warehouse_id}
+      parent_path: /Workspace/Users/${workspace.current_user.userName}
+      serialized_space:
+        version: 2
+        config:
+          sample_questions:
+            - id: "0a000000000000000000000000000001"
+              question: ["Qual o valor total em risco por hub e quantos lojistas críticos cada um tem?"]
+            - id: "0a000000000000000000000000000002"
+              question: ["Para quais concorrentes estamos perdendo mais recebíveis nas últimas 4 semanas?"]
+            - id: "0a000000000000000000000000000003"
+              question: ["Qual o percentual do saldo de capital de giro com mais de 60 dias de atraso, por segmento?"]
+            - id: "0a000000000000000000000000000004"
+              question: ["Quais os 10 lojistas de maior valor em risco no Hub SP Zona Leste e o que devemos fazer?"]
+            - id: "0a000000000000000000000000000005"
+              question: ["Com quantos dias de antecedência o radar detecta inadimplência?"]
+        data_sources:
+          tables:
+            - identifier: ${var.catalog}.${var.schema}.alertas_lojistas
+            - identifier: ${var.catalog}.${var.schema}.backtest_radar
+            - identifier: ${var.catalog}.${var.schema}.dim_lojistas
+            - identifier: ${var.catalog}.${var.schema}.gold_atendimentos_sinais
+            - identifier: ${var.catalog}.${var.schema}.gold_carteira_credito
+            - identifier: ${var.catalog}.${var.schema}.gold_concorrencia_semana
+            - identifier: ${var.catalog}.${var.schema}.gold_lojista_semana
+            - identifier: ${var.catalog}.${var.schema}.scores_lojistas
+        instructions:
+          text_instructions:
+            - id: "0b000000000000000000000000000001"
+              content:
+                - |
+                  Você é o analista do Radar de Vazamento de Recebíveis da ${var.empresa}, credenciadora que atende micro, pequenos e
+                  médios lojistas no Brasil. Responda SEMPRE em português do Brasil, de forma executiva: primeiro o número, depois
+                  2-3 bullets de explicação e, quando fizer sentido, a implicação para decisão.
+
+                  CONTEXTO DE NEGÓCIO
+                  - O capital de giro é pago por uma trava de % dos recebíveis de CARTÃO que passam na ${var.empresa}. Quando o lojista
+                    leva o cartão para um concorrente (desvio) ou migra para Pix, a empresa perde receita de MDR E a garantia do crédito.
+                  - A registradora mostra os recebíveis do lojista em TODAS as credenciadoras (gold_concorrencia_semana, gold_lojista_semana.recebiveis_concorrentes).
+                  - Concorrentes (fictícios): NuvemPay, PagaLogo, Maquininha Azul, Banco Laranja PJ, MercaPix.
+
+                  CONTEXTO TEMPORAL
+                  - Hoje é ${var.data_referencia}. A última semana completa começa em 2026-09-28. Semanas começam na segunda-feira.
+                  - "Últimas 4 semanas" = semana >= 2026-09-07 AND semana <= 2026-09-28. "12 semanas anteriores" = as 12 semanas antes disso.
+                  - Ignore a semana corrente incompleta (semana > 2026-09-28) em comparações de tendência.
+
+                  DEFINIÇÕES OFICIAIS
+                  - Valor em risco = alertas_lojistas.valor_em_risco (ou scores_lojistas.valor_em_risco) = prob. de inadimplência × saldo devedor
+                    + prob. de vazamento × receita anual de MDR. É a métrica principal de priorização.
+                  - Lojista crítico = faixa_risco = 'Crítico'. Alerta = faixa_risco IN ('Crítico','Alto','Médio') (tabela alertas_lojistas).
+                    'Em cobrança' = contrato já com mais de 60 dias de atraso (fora do radar de alerta antecipado; está em scores_lojistas).
+                  - Inadimplência da carteira = SUM(saldo_devedor) WHERE dias_atraso > 60 / SUM(saldo_devedor) WHERE faixa_atraso <> 'Quitado', em gold_carteira_credito.
+                  - Share da ${var.empresa} = recebiveis_pedregulho / (recebiveis_pedregulho + recebiveis_concorrentes).
+                  - Ganho de um concorrente = soma de valor_recebiveis do concorrente nas últimas 4 semanas menos (média das 12 semanas anteriores × 4).
+                  - TPV = valor transacionado. tpv_cartao = crédito + débito (é o que entra na trava).
+
+                  FORMATO
+                  - Valores em R$ abreviados (R$ 12,3 mi; R$ 850 mil). Percentuais com 1 casa decimal. Cite período e filtros.
+                  - Nunca exponha CNPJ, CPF, telefone ou e-mail: use id_lojista e nome_fantasia.
+          example_question_sqls:
+            - id: "0c000000000000000000000000000001"
+              question: ["Qual o valor total em risco por hub e quantos lojistas críticos cada um tem?"]
+              sql:
+                - |
+                  SELECT hub,
+                         COUNT(*) AS lojistas_em_alerta,
+                         COUNT_IF(faixa_risco = 'Crítico') AS lojistas_criticos,
+                         ROUND(SUM(valor_em_risco), 0) AS valor_em_risco,
+                         ROUND(SUM(saldo_devedor), 0) AS saldo_devedor_em_alerta
+                  FROM ${var.catalog}.${var.schema}.alertas_lojistas
+                  GROUP BY hub
+                  ORDER BY valor_em_risco DESC
+            - id: "0c000000000000000000000000000002"
+              question: ["Para quais concorrentes estamos perdendo mais recebíveis nas últimas 4 semanas?"]
+              sql:
+                - |
+                  WITH base AS (
+                    SELECT credenciadora,
+                           SUM(CASE WHEN semana BETWEEN DATE'2026-09-07' AND DATE'2026-09-28' THEN valor_recebiveis END) AS ult_4s,
+                           SUM(CASE WHEN semana BETWEEN DATE'2026-06-15' AND DATE'2026-08-31' THEN valor_recebiveis END) / 12 * 4 AS base_4s
+                    FROM ${var.catalog}.${var.schema}.gold_concorrencia_semana
+                    WHERE NOT e_pedregulho
+                    GROUP BY credenciadora
+                  )
+                  SELECT credenciadora, ROUND(ult_4s, 0) AS recebiveis_ult_4s, ROUND(base_4s, 0) AS recebiveis_base_4s,
+                         ROUND(ult_4s - base_4s, 0) AS ganho_concorrente, ROUND((ult_4s / base_4s - 1) * 100, 1) AS crescimento_pct
+                  FROM base ORDER BY ganho_concorrente DESC
+            - id: "0c000000000000000000000000000003"
+              question: ["Qual o percentual do saldo de capital de giro com mais de 60 dias de atraso, por segmento?"]
+              sql:
+                - |
+                  SELECT segmento,
+                         ROUND(SUM(saldo_devedor), 0) AS saldo_ativo,
+                         ROUND(SUM(CASE WHEN dias_atraso > 60 THEN saldo_devedor ELSE 0 END), 0) AS saldo_inadimplente_60,
+                         ROUND(SUM(CASE WHEN dias_atraso > 60 THEN saldo_devedor ELSE 0 END) / SUM(saldo_devedor) * 100, 1) AS inadimplencia_pct
+                  FROM ${var.catalog}.${var.schema}.gold_carteira_credito
+                  WHERE faixa_atraso <> 'Quitado'
+                  GROUP BY segmento ORDER BY inadimplencia_pct DESC
+            - id: "0c000000000000000000000000000004"
+              question: ["Com quantos dias de antecedência o radar detecta inadimplência?"]
+              sql:
+                - |
+                  SELECT modelo, metrica, ROUND(valor, 3) AS valor, descricao
+                  FROM ${var.catalog}.${var.schema}.backtest_radar
+                  ORDER BY modelo, metrica
+
+  apps:
+    radar_app:
+      name: radar-recebiveis-${bundle.target}
+      description: Radar do Hub — fila priorizada de lojistas em risco, ações de campo e Genie (${var.empresa}).
+      source_code_path: ../app
+      config:
+        command: [python, app.py]
+        env:
+          - { name: EMPRESA, value: "${var.empresa}" }
+          - { name: UC_SCHEMA, value: "${var.catalog}.${var.schema}" }
+          - { name: SYNC_SCHEMA, value: "${var.schema}" }
+          - { name: LAKEBASE_BRANCH, value: "projects/${var.lakebase_project}/branches/production" }
+          - { name: LAKEBASE_DATABASE, value: "${var.lakebase_database}" }
+          - { name: DATABRICKS_WAREHOUSE_ID, value_from: warehouse }
+          - { name: GENIE_SPACE_ID, value_from: genie }
+      resources:
+        - name: warehouse
+          sql_warehouse:
+            id: ${var.warehouse_id}
+            permission: CAN_USE
+        - name: genie
+          genie_space:
+            name: Radar de Recebíveis
+            space_id: ${resources.genie_spaces.radar_genie.id}
+            permission: CAN_RUN
+        - name: lakebase
+          postgres:
+            branch: ${resources.postgres_projects.radar_lakebase.name}/branches/production
+            database: ${resources.postgres_projects.radar_lakebase.name}/branches/production/databases/databricks-postgres
+            permission: CAN_CONNECT_AND_CREATE

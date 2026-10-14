@@ -1,0 +1,13 @@
+# Lakebase Autoscaling (Postgres gerenciado): serving operacional da fila + write-back das ações do campo
+resources:
+  postgres_projects:
+    radar_lakebase:
+      project_id: ${var.lakebase_project}
+      display_name: Radar de Recebíveis (${bundle.target})
+      pg_version: 17
+      default_endpoint_settings:
+        autoscaling_limit_min_cu: 0.5
+        autoscaling_limit_max_cu: 4
+
+  # Usamos o banco padrão do projeto (databricks_postgres), que existe em qualquer projeto Lakebase —
+  # evita depender do role do usuário que faz o deploy (mais portável).

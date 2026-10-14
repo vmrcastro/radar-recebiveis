@@ -1,0 +1,51 @@
+$ databricks bundle validate -t dev
+Name: radar_recebiveis
+Target: dev
+Workspace:
+  User: vinicius.castro@databricks.com
+  Path: /Workspace/Users/vinicius.castro@databricks.com/.bundle/radar_recebiveis/dev
+
+Validation OK!
+
+$ databricks bundle summary -t dev
+Name: radar_recebiveis
+Target: dev
+Workspace:
+  User: vinicius.castro@databricks.com
+  Path: /Workspace/Users/vinicius.castro@databricks.com/.bundle/radar_recebiveis/dev
+Resources:
+  Apps:
+    radar_app:
+      Name: radar-recebiveis-dev
+      URL:  (not deployed)
+  Experiments:
+    radar_experimento:
+      Name: /Workspace/Users/vinicius.castro@databricks.com/radar_recebiveis_dev
+      URL:  https://fevm-vini.cloud.databricks.com/ml/experiments/1379980954624946?w=7474658470734499
+  Genie Spaces:
+    radar_genie:
+      Name: Radar de Recebíveis — Pedregulho Pagamentos
+      URL:  https://fevm-vini.cloud.databricks.com/genie/rooms/01f1c402f1b1160ca739617302d6b292?w=7474658470734499
+  Jobs:
+    radar_jornada:
+      Name: Radar de Recebíveis — Jornada completa (dev)
+      URL:  https://fevm-vini.cloud.databricks.com/jobs/883752161988103?w=7474658470734499
+  Pipelines:
+    radar_pipeline:
+      Name: Radar de Recebíveis — Lakeflow (dev)
+      URL:  https://fevm-vini.cloud.databricks.com/pipelines/af3d815c-1a11-4957-9d1e-c8f038763622?w=7474658470734499
+  Postgres projects:
+    radar_lakebase:
+      Name: Radar de Recebíveis (dev)
+  Postgres synced tables:
+    alertas:
+      Name: vini_catalog.radar_recebiveis.alertas_lojistas_lakebase
+      URL:  https://fevm-vini.cloud.databricks.com/explore/data/vini_catalog/radar_recebiveis/alertas_lojistas_lakebase?w=7474658470734499
+  Schemas:
+    radar_schema:
+      Name: radar_recebiveis
+      URL:  https://fevm-vini.cloud.databricks.com/explore/data/vini_catalog/radar_recebiveis?w=7474658470734499
+  Volumes:
+    landing:
+      Name: landing
+      URL:  https://fevm-vini.cloud.databricks.com/explore/data/volumes/vini_catalog/radar_recebiveis/landing?w=7474658470734499

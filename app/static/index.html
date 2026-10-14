@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Radar do Hub</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked@14.1.3/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.7/dist/purify.min.js"></script>
+<style>
+  :root {
+    --bg: #f5f6f4; --card: #ffffff; --ink: #1d2521; --muted: #66706b; --line: #e3e6e2;
+    --brand: #0f6e54; --brand-2: #e6f2ed; --conc: #c2560f; --crit: #b42318; --alto: #d97706; --medio: #ca8a04; --ok: #15803d;
+    --radius: 12px; --shadow: 0 1px 2px rgba(16,24,20,.06), 0 1px 3px rgba(16,24,20,.08);
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.45 Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: var(--ink); background: var(--bg); }
+  header { display: flex; align-items: center; gap: 16px; padding: 14px 28px; background: #0d2b22; color: #fff; }
+  header .logo { font-size: 22px; } header h1 { font-size: 17px; margin: 0; font-weight: 600; }
+  header .sub { color: #a9c7bb; font-size: 12px; }
+  nav { margin-left: auto; display: flex; gap: 4px; }
+  nav button { background: transparent; color: #cfe3da; border: 0; padding: 8px 14px; border-radius: 8px; cursor: pointer; font-weight: 500; font-size: 14px; }
+  nav button.ativo { background: #1d4a3b; color: #fff; }
+  main { padding: 22px 28px 40px; max-width: 1440px; margin: 0 auto; }
+  .tab { display: none; } .tab.ativo { display: block; }
+  .grid { display: grid; gap: 16px; }
+  .kpis { grid-template-columns: repeat(5, 1fr); }
+  .card { background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow); padding: 16px 18px; }
+  .kpi .rot { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+  .kpi .val { font-size: 26px; font-weight: 650; margin-top: 4px; font-variant-numeric: tabular-nums; }
+  .kpi .det { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .kpi.destaque { background: var(--brand); color: #fff; } .kpi.destaque .rot, .kpi.destaque .det { color: #cde9df; }
+  .faixa { display: flex; gap: 12px; align-items: center; background: var(--brand-2); border: 1px solid #c7e3d7; padding: 12px 16px; border-radius: var(--radius); margin: 16px 0; }
+  .faixa b { color: var(--brand); }
+  .dois { grid-template-columns: 1.4fr 1fr; margin-top: 16px; }
+  .tres { grid-template-columns: 1fr 1fr 1fr; margin-top: 16px; }
+  h2 { font-size: 14px; margin: 0 0 10px; font-weight: 600; } h2 small { color: var(--muted); font-weight: 400; }
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  th { text-align: left; color: var(--muted); font-weight: 500; font-size: 12px; padding: 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  td { padding: 9px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  tr.click:hover { background: #f1f6f3; cursor: pointer; }
+  .num { text-align: right; }
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+  .Crítico { background: #fde8e7; color: var(--crit); } .Alto { background: #fdf0dc; color: #a35a05; } .Médio { background: #fbf5d5; color: #8a6304; }
+  .tag { display: inline-block; padding: 2px 8px; border-radius: 6px; background: #eef1ef; color: #36413c; font-size: 12px; }
+  .filtros { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 14px; }
+  select, input, textarea { font: inherit; padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+  button.prim { background: var(--brand); color: #fff; border: 0; padding: 9px 16px; border-radius: 8px; font-weight: 600; cursor: pointer; }
+  button.sec { background: #fff; border: 1px solid var(--line); padding: 7px 12px; border-radius: 8px; cursor: pointer; }
+  .latencia { margin-left: auto; color: var(--muted); font-size: 12px; }
+  .latencia b { color: var(--brand); }
+  .drawer { position: fixed; top: 0; right: -760px; width: 740px; height: 100vh; background: #fff; box-shadow: -8px 0 24px rgba(0,0,0,.12); transition: right .25s; overflow-y: auto; z-index: 10; }
+  .drawer.aberto { right: 0; }
+  .drawer .topo { padding: 18px 22px; border-bottom: 1px solid var(--line); display: flex; gap: 12px; align-items: start; position: sticky; top: 0; background: #fff; z-index: 2; }
+  .drawer .corpo { padding: 18px 22px; display: grid; gap: 16px; }
+  .ia { background: #f6f8ff; border: 1px solid #dfe5fb; border-radius: 10px; padding: 12px 14px; }
+  .ia .rot { font-size: 11px; color: #4b5bb8; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
+  ul.sinais { margin: 6px 0 0; padding-left: 18px; } ul.sinais li { margin: 3px 0; }
+  .mini { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .mini div { background: #f6f7f6; border-radius: 8px; padding: 8px 10px; } .mini span { display: block; color: var(--muted); font-size: 11px; } .mini b { font-size: 16px; }
+  .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #0d2b22; color: #fff; padding: 12px 18px; border-radius: 10px; opacity: 0; transition: opacity .2s; z-index: 20; }
+  .toast.on { opacity: 1; }
+  .chat { max-width: 1040px; margin: 0 auto; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 16px; }
+  .chip { background: #fff; border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; cursor: pointer; font-size: 13px; }
+  .chip:hover { border-color: var(--brand); color: var(--brand); }
+  .msg { margin: 12px 0; } .msg.user { text-align: right; } .msg.user .bolha { background: var(--brand); color: #fff; display: inline-block; }
+  .bolha { background: #fff; box-shadow: var(--shadow); border-radius: 12px; padding: 12px 16px; max-width: 100%; text-align: left; }
+  .md p { margin: 0 0 8px; } .md p:last-child { margin-bottom: 0; }
+  .md ul, .md ol { margin: 4px 0 8px; padding-left: 22px; } .md li { margin: 2px 0; }
+  .md strong { font-weight: 650; } .md code { background: #eef1ef; padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+  .md h1, .md h2, .md h3 { font-size: 15px; margin: 10px 0 6px; }
+  .md table { margin: 6px 0; } .md + .md { margin-top: 10px; }
+  .md.descricao { color: var(--muted); font-size: 13px; border-left: 3px solid var(--line); padding-left: 10px; }
+  .md.seguimento { color: var(--brand); font-style: italic; }
+  details summary { cursor: pointer; color: var(--muted); font-size: 12px; margin-top: 8px; }
+  pre { background: #0f1a16; color: #d6efe4; padding: 12px; border-radius: 8px; overflow-x: auto; font-size: 12px; }
+  .entrada { display: flex; gap: 10px; position: sticky; bottom: 0; background: var(--bg); padding: 12px 0; }
+  .entrada input { flex: 1; padding: 12px 14px; font-size: 15px; }
+  .carregando { color: var(--muted); font-style: italic; }
+  .tabela-scroll { max-height: 340px; overflow: auto; }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">🪨</div>
+  <div>
+    <h1 id="titulo">Radar do Hub</h1>
+    <div class="sub">Radar de Vazamento de Recebíveis · dados sintéticos para demonstração</div>
+  </div>
+  <nav>
+    <button data-tab="exec" class="ativo">Visão executiva</button>
+    <button data-tab="fila">Fila do Hub</button>
+    <button data-tab="genie">Pergunte ao Radar</button>
+  </nav>
+</header>
+
+<main>
+  <!-- ======================= VISÃO EXECUTIVA ======================= -->
+  <section id="exec" class="tab ativo">
+    <div class="grid kpis" id="kpis"></div>
+    <div class="faixa" id="faixa-backtest"></div>
+    <div class="grid dois">
+      <div class="card"><h2>Recebíveis de cartão dos nossos lojistas <small>· registradora, R$/semana</small></h2><canvas id="g-tendencia" height="120"></canvas></div>
+      <div class="card"><h2>Quem está ganhando nossos recebíveis <small>· ganho nas últimas 4 semanas vs média</small></h2><canvas id="g-conc" height="170"></canvas></div>
+    </div>
+    <div class="grid dois">
+      <div class="card"><h2>Valor em risco por hub</h2><div class="tabela-scroll"><table id="t-hub"></table></div></div>
+      <div class="card"><h2>Valor em risco por tipo de sinal</h2><canvas id="g-tipo" height="170"></canvas></div>
+    </div>
+  </section>
+
+  <!-- ======================= FILA DO HUB ======================= -->
+  <section id="fila" class="tab">
+    <div class="filtros">
+      <select id="f-hub"><option value="">Todos os hubs</option></select>
+      <select id="f-faixa"><option value="">Todas as faixas</option><option>Crítico</option><option>Alto</option><option>Médio</option></select>
+      <select id="f-tipo"><option value="">Todos os sinais</option><option>Desvio para concorrente</option><option>Queda de faturamento</option><option>Migração para Pix</option><option>Retenção insuficiente</option><option>Sinais combinados</option></select>
+      <input id="f-busca" placeholder="Buscar lojista..." />
+      <span class="latencia" id="latencia"></span>
+    </div>
+    <div class="card" style="padding:4px 8px">
+      <table id="t-fila"></table>
+    </div>
+  </section>
+
+  <!-- ======================= GENIE ======================= -->
+  <section id="genie" class="tab">
+    <div class="chat">
+      <div class="card">
+        <h2>Pergunte ao Radar <small>· Genie sobre as tabelas governadas no Unity Catalog</small></h2>
+        <div class="chips" id="chips"></div>
+      </div>
+      <div id="conversa"></div>
+      <div class="entrada">
+        <input id="pergunta" placeholder="Ex.: Qual segmento mais perdeu share para a NuvemPay no Nordeste?" />
+        <button class="prim" id="enviar">Perguntar</button>
+        <button class="sec" id="nova">Nova conversa</button>
+      </div>
+    </div>
+  </section>
+</main>
+
+<aside class="drawer" id="drawer"></aside>
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const BRL = (v) => v == null ? "—" : "R$ " + abrev(v);
+function abrev(v) {
+  const a = Math.abs(v);
+  if (a >= 1e6) return (v / 1e6).toLocaleString("pt-BR", { maximumFractionDigits: 1 }) + " mi";
+  if (a >= 1e3) return (v / 1e3).toLocaleString("pt-BR", { maximumFractionDigits: 0 }) + " mil";
+  return Number(v).toLocaleString("pt-BR", { maximumFractionDigits: 0 });
+}
+const PCT = (v, d = 0) => v == null ? "—" : (v * 100).toLocaleString("pt-BR", { maximumFractionDigits: d }) + "%";
+const INT = (v) => Number(v || 0).toLocaleString("pt-BR");
+const COR = { brand: "#0f6e54", conc: "#c2560f", muted: "#9aa5a0", crit: "#b42318" };
+const charts = {};
+function chart(id, cfg) { charts[id]?.destroy(); charts[id] = new Chart(document.getElementById(id), cfg); }
+function toast(t) { const el = $("#toast"); el.textContent = t; el.classList.add("on"); setTimeout(() => el.classList.remove("on"), 3200); }
+async function api(url, opt) { const r = await fetch(url, opt); if (!r.ok) throw new Error(await r.text()); return r.json(); }
+
+document.querySelectorAll("nav button").forEach((b) => b.onclick = () => {
+  document.querySelectorAll("nav button").forEach((x) => x.classList.toggle("ativo", x === b));
+  document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("ativo", t.id === b.dataset.tab));
+  if (b.dataset.tab === "fila") carregarFila();
+});
+
+// ------------------------------------------------------------------ Executiva
+async function carregarResumo() {
+  const r = await api("/api/resumo");
+  const k = r.kpis, c = r.carteira, a = r.acoes;
+  const inad = c.saldo_ativo ? Number(c.saldo_inad_60) / Number(c.saldo_ativo) : null;
+  $("#kpis").innerHTML = `
+    <div class="card kpi destaque"><div class="rot">Valor em risco</div><div class="val">${BRL(k.valor_em_risco)}</div><div class="det">${BRL(k.valor_risco_credito)} crédito · ${BRL(k.valor_risco_receita)} receita/ano</div></div>
+    <div class="card kpi"><div class="rot">Lojistas em alerta</div><div class="val">${INT(k.alertas)}</div><div class="det">${INT(k.criticos)} críticos</div></div>
+    <div class="card kpi"><div class="rot">Saldo de crédito em alerta</div><div class="val">${BRL(k.saldo_em_alerta)}</div><div class="det">de ${BRL(Number(c.saldo_ativo))} na carteira ativa</div></div>
+    <div class="card kpi"><div class="rot">Inadimplência &gt;60 dias</div><div class="val">${PCT(inad, 1)}</div><div class="det">${BRL(Number(c.saldo_inad_60))} do saldo ativo</div></div>
+    <div class="card kpi"><div class="rot">Protegido pelo campo</div><div class="val">${BRL(a.valor_protegido)}</div><div class="det">${INT(a.acordos)} acordos · ${INT(a.lojistas_tratados)} lojistas tratados</div></div>`;
+  const bt = Object.fromEntries(r.backtest.map((x) => [x.modelo + "." + x.metrica, Number(x.valor)]));
+  $("#faixa-backtest").innerHTML = `🔎 <span><b>Backtest das últimas 12 semanas:</b> o radar sinalizou
+    <b>${PCT(bt["inadimplencia.recall_antecipado"])}</b> dos contratos que viraram inadimplência
+    (<b>${PCT(bt["inadimplencia.pct_valor_sinalizado"])}</b> do saldo), com mediana de <b>${INT(bt["inadimplencia.antecedencia_mediana_dias"])} dias</b> de antecedência,
+    e <b>${PCT(bt["vazamento.recall_antecipado"])}</b> dos lojistas que vazaram o TPV (${PCT(bt["vazamento.pct_valor_sinalizado"])} da receita de MDR).</span>`;
+
+  chart("g-tendencia", { type: "line", data: { labels: r.tendencia.map((x) => x.semana.slice(5).split("-").reverse().join("/")), datasets: [
+      { label: "Na Pedregulho", data: r.tendencia.map((x) => Number(x.pedregulho)), borderColor: COR.brand, backgroundColor: COR.brand, tension: .3, pointRadius: 0, borderWidth: 2.5 },
+      { label: "Em concorrentes", data: r.tendencia.map((x) => Number(x.concorrentes)), borderColor: COR.conc, backgroundColor: COR.conc, tension: .3, pointRadius: 0, borderWidth: 2.5 } ] },
+    options: { plugins: { legend: { position: "bottom" }, tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${BRL(c.raw)}` } } }, scales: { y: { ticks: { callback: (v) => abrev(v) } } } } });
+  chart("g-conc", { type: "bar", data: { labels: r.concorrentes.map((x) => x.credenciadora), datasets: [
+      { data: r.concorrentes.map((x) => Number(x.ganho_4s)), backgroundColor: r.concorrentes.map((x) => Number(x.ganho_4s) > 0 ? COR.conc : COR.muted), borderRadius: 4 } ] },
+    options: { indexAxis: "y", plugins: { legend: { display: false }, tooltip: { callbacks: { label: (c) => BRL(c.raw) } } }, scales: { x: { ticks: { callback: (v) => abrev(v) } } } } });
+  chart("g-tipo", { type: "bar", data: { labels: r.por_tipo.map((x) => x.tipo_sinal), datasets: [
+      { data: r.por_tipo.map((x) => x.valor_em_risco), backgroundColor: COR.brand, borderRadius: 4 } ] },
+    options: { indexAxis: "y", plugins: { legend: { display: false }, tooltip: { callbacks: { label: (c) => `${BRL(c.raw)} · ${INT(r.por_tipo[c.dataIndex].lojistas)} lojistas` } } }, scales: { x: { ticks: { callback: (v) => abrev(v) } } } } });
+  $("#t-hub").innerHTML = `<tr><th>Hub</th><th class="num">Lojistas</th><th class="num">Críticos</th><th class="num">Valor em risco</th></tr>` +
+    r.por_hub.map((h) => `<tr class="click" onclick="irFila('${h.hub}')"><td>${h.hub}</td><td class="num">${INT(h.lojistas)}</td><td class="num">${INT(h.criticos)}</td><td class="num"><b>${BRL(h.valor_em_risco)}</b></td></tr>`).join("");
+}
+function irFila(hub) { $("#f-hub").value = hub; document.querySelector('nav button[data-tab="fila"]').click(); }
+
+// ------------------------------------------------------------------ Fila
+async function carregarFila() {
+  const q = new URLSearchParams({ hub: $("#f-hub").value, faixa: $("#f-faixa").value, tipo: $("#f-tipo").value, busca: $("#f-busca").value });
+  const r = await api("/api/fila?" + q);
+  $("#latencia").innerHTML = `${r.itens.length} lojistas · consulta no Lakebase em <b>${r.latencia_ms} ms</b>`;
+  $("#t-fila").innerHTML = `<tr><th>#</th><th>Lojista</th><th>Hub · agente</th><th>Risco</th><th>Sinal</th><th class="num">Valor em risco</th><th class="num">Saldo devedor</th><th class="num">Δ TPV cartão</th><th>Ação recomendada</th><th>Status</th></tr>` +
+    r.itens.map((x) => `<tr class="click" onclick="abrir('${x.id_lojista}')">
+      <td>${x.prioridade}</td>
+      <td><b>${x.nome_fantasia}</b><br><span style="color:var(--muted);font-size:12px">${x.segmento} · ${x.cidade}/${x.uf}</span></td>
+      <td>${x.hub}<br><span style="color:var(--muted);font-size:12px">${x.agente_responsavel}</span></td>
+      <td><span class="pill ${x.faixa_risco}">${x.faixa_risco}</span></td>
+      <td><span class="tag">${x.tipo_sinal}</span>${x.principal_concorrente && x.tipo_sinal === "Desvio para concorrente" ? `<br><span style="font-size:12px;color:var(--conc)">→ ${x.principal_concorrente}</span>` : ""}</td>
+      <td class="num"><b>${BRL(x.valor_em_risco)}</b></td>
+      <td class="num">${x.saldo_devedor ? BRL(x.saldo_devedor) : "—"}</td>
+      <td class="num" style="color:${x.variacao_tpv_cartao < 0 ? COR.crit : COR.brand}">${PCT(x.variacao_tpv_cartao)}</td>
+      <td>${x.acao_recomendada}</td>
+      <td>${x.ultimo_resultado ? `<span class="tag" style="background:#e6f2ed;color:var(--brand)">${x.ultimo_resultado}</span>` : `<span style="color:var(--muted)">Pendente</span>`}</td>
+    </tr>`).join("");
+}
+["#f-hub", "#f-faixa", "#f-tipo"].forEach((s) => $(s).onchange = carregarFila);
+let tBusca; $("#f-busca").oninput = () => { clearTimeout(tBusca); tBusca = setTimeout(carregarFila, 300); };
+
+async function abrir(id) {
+  const d = $("#drawer");
+  d.innerHTML = `<div class="corpo carregando">Carregando lojista...</div>`; d.classList.add("aberto");
+  const r = await api("/api/lojista/" + id);
+  const a = r.alerta;
+  const roteiro = (a.roteiro_abordagem || "").split(/\n|(?=\d\.\s)/).filter((s) => s.trim());
+  d.innerHTML = `
+    <div class="topo">
+      <div style="flex:1"><div style="font-size:18px;font-weight:650">${a.nome_fantasia}</div>
+        <div style="color:var(--muted)">${a.id_lojista} · ${a.segmento} · ${a.porte} · ${a.cidade}/${a.uf} · ${a.hub} · agente ${a.agente_responsavel}</div></div>
+      <span class="pill ${a.faixa_risco}">${a.faixa_risco}</span>
+      <button class="sec" onclick="$('#drawer').classList.remove('aberto')">Fechar ✕</button>
+    </div>
+    <div class="corpo">
+      <div class="mini">
+        <div><span>Valor em risco</span><b>${BRL(a.valor_em_risco)}</b></div>
+        <div><span>Prob. vazamento (8 sem.)</span><b>${PCT(a.prob_vazamento)}</b></div>
+        <div><span>Prob. inadimplência (13 sem.)</span><b>${a.prob_inadimplencia == null ? "sem crédito" : PCT(a.prob_inadimplencia)}</b></div>
+        <div><span>Saldo devedor · atraso</span><b>${a.saldo_devedor ? BRL(a.saldo_devedor) : "—"}${a.dias_atraso ? " · " + a.dias_atraso + "d" : ""}</b></div>
+      </div>
+      <div class="ia"><div class="rot">✨ Resumo gerado por IA</div><div style="margin-top:4px">${a.resumo_ia || ""}</div>
+        <div style="margin-top:8px"><b>Sinais observados</b><ul class="sinais">${(a.sinais || "").split(" | ").map((s) => `<li>${s}</li>`).join("")}</ul></div></div>
+      <div class="card" style="box-shadow:none;border:1px solid var(--line)"><h2>Últimas 26 semanas <small>· cartão na Pedregulho × recebíveis em concorrentes × saldo devedor</small></h2><canvas id="g-loj" height="120"></canvas></div>
+      <div class="ia"><div class="rot">🎯 Próxima melhor ação</div>
+        <div style="margin-top:4px"><b>${a.acao_recomendada}</b>${a.oferta_sugerida ? " — " + a.oferta_sugerida : ""}</div>
+        ${roteiro.length ? `<div style="margin-top:8px"><b>Roteiro para o agente</b><ol class="sinais">${roteiro.map((s) => `<li>${s.replace(/^\d\.\s*/, "")}</li>`).join("")}</ol></div>` : ""}</div>
+      ${r.atendimentos.length ? `<div><h2>Atendimentos recentes <small>· sinais extraídos por IA no pipeline</small></h2><table>${r.atendimentos.map((t) => `<tr><td style="white-space:nowrap">${t.data}<br><span class="tag">${t.canal}</span></td><td>${t.texto}<br><span style="font-size:12px;color:var(--muted)">${t.motivo || ""}${t.concorrente_citado && t.concorrente_citado !== "null" ? " · concorrente: <b>" + t.concorrente_citado + "</b>" : ""} · risco ${t.risco_cancelamento || "—"}</span></td></tr>`).join("")}</table></div>` : ""}
+      <div class="card" style="box-shadow:none;border:1px solid var(--line)">
+        <h2>Registrar ação do campo <small>· grava no Lakebase (transacional)</small></h2>
+        <div class="filtros">
+          <select id="a-acao"><option>Visita presencial</option><option>Ligação</option><option>WhatsApp</option><option>Oferta de retenção (taxa)</option><option>Renegociação de contrato</option></select>
+          <select id="a-res"><option>Retido / acordo fechado</option><option>Em negociação</option><option>Não atendeu</option><option>Perdido para concorrente</option></select>
+          <input id="a-obs" placeholder="Observação" style="flex:1" />
+          <button class="prim" onclick="registrar('${a.id_lojista}', '${a.agente_responsavel}')">Registrar</button>
+        </div>
+        ${r.acoes.length ? `<table>${r.acoes.map((x) => `<tr><td>${new Date(x.registrado_em).toLocaleString("pt-BR")}</td><td>${x.agente}</td><td>${x.acao}</td><td><b>${x.resultado}</b></td><td>${x.observacao || ""}</td></tr>`).join("")}</table>` : `<div style="color:var(--muted)">Nenhuma ação registrada ainda.</div>`}
+      </div>
+    </div>`;
+  const h = r.historico;
+  chart("g-loj", { type: "line", data: { labels: h.map((x) => x.semana.slice(5).split("-").reverse().join("/")), datasets: [
+      { label: "Cartão na Pedregulho", data: h.map((x) => Number(x.tpv_cartao)), borderColor: COR.brand, backgroundColor: COR.brand, tension: .3, pointRadius: 0, borderWidth: 2.5 },
+      { label: "Recebíveis em concorrentes", data: h.map((x) => Number(x.recebiveis_concorrentes)), borderColor: COR.conc, backgroundColor: COR.conc, tension: .3, pointRadius: 0, borderWidth: 2.5 },
+      { label: "Saldo devedor", data: h.map((x) => x.saldo_devedor == null ? null : Number(x.saldo_devedor)), borderColor: COR.muted, borderDash: [5, 4], tension: .3, pointRadius: 0, borderWidth: 2, yAxisID: "y2" } ] },
+    options: { plugins: { legend: { position: "bottom" }, tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${BRL(c.raw)}` } } },
+      scales: { y: { ticks: { callback: (v) => abrev(v) }, title: { display: true, text: "R$/semana" } }, y2: { position: "right", grid: { display: false }, ticks: { callback: (v) => abrev(v) }, title: { display: true, text: "Saldo" } } } } });
+}
+async function registrar(id, agente) {
+  const body = { id_lojista: id, agente, acao: $("#a-acao").value, resultado: $("#a-res").value, observacao: $("#a-obs").value };
+  const r = await api("/api/acoes", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  toast(`✅ Ação #${r.id_acao} gravada no Lakebase em ${r.latencia_ms} ms`);
+  abrir(id); carregarFila(); carregarResumo();
+}
+
+// ------------------------------------------------------------------ Genie
+const SUGESTOES = [
+  "Qual o valor total em risco por hub e quantos lojistas críticos cada um tem?",
+  "Para quais concorrentes estamos perdendo mais recebíveis nas últimas 4 semanas?",
+  "Qual o percentual do saldo de capital de giro com mais de 60 dias de atraso, por segmento?",
+  "Quais os 10 lojistas de maior valor em risco no Hub SP Zona Leste e o que devemos fazer?",
+  "Quais motivos mais aparecem nos atendimentos dos lojistas críticos?",
+  "Com quantos dias de antecedência o radar detecta inadimplência?",
+];
+let conversa = null;
+$("#chips").innerHTML = SUGESTOES.map((s) => `<span class="chip">${s}</span>`).join("");
+document.querySelectorAll(".chip").forEach((c) => c.onclick = () => perguntar(c.textContent));
+$("#enviar").onclick = () => perguntar($("#pergunta").value);
+$("#pergunta").onkeydown = (e) => { if (e.key === "Enter") perguntar($("#pergunta").value); };
+$("#nova").onclick = () => { conversa = null; $("#conversa").innerHTML = ""; };
+// Genie responde em Markdown: renderiza e sanitiza (texto vem de LLM)
+function md(t) {
+  if (!window.marked || !window.DOMPurify) return `<div style="white-space:pre-wrap">${esc(t)}</div>`;
+  return DOMPurify.sanitize(marked.parse(String(t ?? ""), { breaks: true, gfm: true }));
+}
+function esc(s) { return String(s ?? "").replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c])); }
+function fmtCel(v) { const n = Number(v); return v !== null && v !== "" && !isNaN(n) && /^-?\d+(\.\d+)?(E-?\d+)?$/i.test(v) ? n.toLocaleString("pt-BR", { maximumFractionDigits: 2 }) : esc(v); }
+async function perguntar(q) {
+  if (!q.trim()) return;
+  $("#pergunta").value = "";
+  const box = $("#conversa");
+  box.insertAdjacentHTML("beforeend", `<div class="msg user"><div class="bolha">${esc(q)}</div></div>`);
+  const id = "r" + Date.now();
+  box.insertAdjacentHTML("beforeend", `<div class="msg" id="${id}"><div class="bolha carregando">Genie está analisando os dados governados...</div></div>`);
+  window.scrollTo(0, document.body.scrollHeight);
+  try {
+    const r = await api("/api/genie", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pergunta: q, conversation_id: conversa }) });
+    conversa = r.conversation_id;
+    const tabela = r.colunas.length ? `<div class="tabela-scroll" style="margin-top:10px"><table><tr>${r.colunas.map((c) => `<th>${esc(c)}</th>`).join("")}</tr>${r.linhas.map((l) => `<tr>${l.map((v) => `<td>${fmtCel(v)}</td>`).join("")}</tr>`).join("")}</table></div>` : "";
+    document.getElementById(id).innerHTML = `<div class="bolha">${r.texto.map((t, i) => `<div class="md${i === 0 && r.texto.length > 1 && r.sql ? " descricao" : ""}${i === r.texto.length - 1 && i > 0 && /\?\s*$/.test(t) ? " seguimento" : ""}">${md(t)}</div>`).join("")}${tabela}${r.sql ? `<details><summary>Ver SQL gerado</summary><pre>${esc(r.sql)}</pre></details>` : ""}</div>`;
+  } catch (e) {
+    document.getElementById(id).innerHTML = `<div class="bolha" style="color:var(--crit)">Erro: ${esc(e.message)}</div>`;
+  }
+  window.scrollTo(0, document.body.scrollHeight);
+}
+
+// ------------------------------------------------------------------ init
+(async () => {
+  const c = await api("/api/config");
+  $("#titulo").textContent = `Radar do Hub · ${c.empresa}`;
+  document.title = `Radar do Hub · ${c.empresa}`;
+  $("#f-hub").insertAdjacentHTML("beforeend", c.hubs.map((h) => `<option>${h}</option>`).join(""));
+  carregarResumo();
+})();
+</script>
+</body>
+</html>

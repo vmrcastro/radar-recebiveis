@@ -1,0 +1,19 @@
+# Lakeflow Declarative Pipeline (serverless): bronze → silver → gold
+resources:
+  pipelines:
+    radar_pipeline:
+      name: Radar de Recebíveis — Lakeflow (${bundle.target})
+      catalog: ${var.catalog}
+      schema: ${resources.schemas.radar_schema.name}
+      serverless: true
+      photon: true
+      channel: CURRENT
+      libraries:
+        - glob:
+            include: ../src/pipeline/**
+      configuration:
+        catalog: ${var.catalog}
+        schema: ${var.schema}
+        landing: /Volumes/${var.catalog}/${var.schema}/landing
+        data_referencia: ${var.data_referencia}
+        llm_extracao: ${var.llm_endpoint_extracao}

@@ -1,0 +1,71 @@
+# Radar de Vazamento de Recebíveis — Pedregulho Pagamentos (empresa fictícia)
+#
+# Jornada end-to-end: Lakeflow (ingestão) → Unity Catalog (governança) → ML + GenAI
+# → Lakebase (serving operacional) → Genie (linguagem natural) → Databricks App.
+#
+# Portável entre workspaces: tudo é parametrizado por variáveis. Para outro workspace,
+# crie um target novo (ou sobrescreva com --var) e rode scripts/deploy.sh.
+bundle:
+  name: radar_recebiveis
+
+include:
+  - resources/*.yml
+
+variables:
+  catalog:
+    description: Catálogo Unity Catalog onde o schema da demo será criado (precisa existir).
+  schema:
+    description: Schema da demo.
+    default: radar_recebiveis
+  empresa:
+    description: Nome da empresa fictícia exibido no app, no Genie e nos textos de GenAI.
+    default: Pedregulho Pagamentos
+  warehouse_id:
+    description: SQL Warehouse usado por Genie, tarefas SQL e App.
+    lookup:
+      warehouse: Serverless Starter Warehouse
+  lakebase_project:
+    description: ID do projeto Lakebase Autoscaling (3-63 chars, minúsculas e hífens).
+    default: radar-recebiveis
+  lakebase_database:
+    description: Banco Postgres dentro do projeto Lakebase (padrão do projeto).
+    default: databricks_postgres
+  llm_endpoint:
+    description: Endpoint de Foundation Model para explicações e roteiros (ai_query).
+    default: databricks-claude-sonnet-4-6
+  llm_endpoint_extracao:
+    description: Endpoint de Foundation Model (rápido/barato) para extrair sinais dos atendimentos.
+    default: databricks-claude-haiku-4-5
+  grupo_pii:
+    description: Grupo de contas que pode ver PII (CNPJ, CPF, telefone) sem máscara.
+    default: radar_pii_leitores
+  n_lojistas:
+    description: Número de lojistas sintéticos.
+    default: "15000"
+  data_referencia:
+    description: '"Hoje" da demo (último dia com dados).'
+    default: "2026-10-08"
+
+targets:
+  # Sem "mode: development" de propósito: nomes de schema/tabelas/projeto Lakebase
+  # ficam estáveis (sem prefixo dev_<usuário>), o que simplifica a apresentação.
+  dev:
+    default: true
+    workspace:
+      profile: fevm-vini
+      root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/${bundle.name}/${bundle.target}
+    variables:
+      catalog: vini_catalog
+
+  # Exemplo de target para outro workspace — ajuste host/catalog e rode
+  #   ./scripts/deploy.sh demo
+  demo:
+    mode: production
+    workspace:
+      host: https://SEU-WORKSPACE.cloud.databricks.com
+      root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/${bundle.name}/${bundle.target}
+    variables:
+      catalog: main
+    permissions:
+      - user_name: ${workspace.current_user.userName}
+        level: CAN_MANAGE

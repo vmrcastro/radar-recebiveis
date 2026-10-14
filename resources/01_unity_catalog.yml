@@ -1,0 +1,23 @@
+# Unity Catalog: schema da demo, Volume de landing (arquivos brutos) e experimento MLflow
+resources:
+  schemas:
+    radar_schema:
+      catalog_name: ${var.catalog}
+      name: ${var.schema}
+      comment: >-
+        Radar de Vazamento de Recebíveis (${var.empresa}, empresa fictícia). Produto de dados de risco de crédito
+        e retenção de lojistas: bronze → silver → gold, modelos, alertas e fonte do Lakebase/Genie/App.
+      properties:
+        dominio: risco_e_retencao
+
+  volumes:
+    landing:
+      catalog_name: ${var.catalog}
+      schema_name: ${resources.schemas.radar_schema.name}
+      name: landing
+      volume_type: MANAGED
+      comment: Zona de pouso dos arquivos brutos (CSV, Parquet, JSON) ingeridos pelo Lakeflow.
+
+  experiments:
+    radar_experimento:
+      name: /Workspace/Users/${workspace.current_user.userName}/radar_recebiveis_${bundle.target}

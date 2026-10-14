@@ -1,0 +1,58 @@
+# Orquestração (Lakeflow Jobs, serverless): a jornada inteira em um único job
+resources:
+  jobs:
+    radar_jornada:
+      name: Radar de Recebíveis — Jornada completa (${bundle.target})
+      description: >-
+        Gera dados sintéticos → ingere e transforma no Lakeflow → treina/pontua modelos → gera alertas com GenAI
+        → aplica governança → publica a fila no Lakebase para o App.
+      performance_target: PERFORMANCE_OPTIMIZED
+      max_concurrent_runs: 1
+      parameters:
+        - { name: catalog, default: "${var.catalog}" }
+        - { name: schema, default: "${var.schema}" }
+        - { name: empresa, default: "${var.empresa}" }
+        - { name: grupo_pii, default: "${var.grupo_pii}" }
+        - { name: n_lojistas, default: "${var.n_lojistas}" }
+        - { name: data_referencia, default: "${var.data_referencia}" }
+        - { name: llm_endpoint, default: "${var.llm_endpoint}" }
+        - { name: lakebase_project, default: "${var.lakebase_project}" }
+        - { name: lakebase_database, default: "${var.lakebase_database}" }
+        - { name: app_name, default: "radar-recebiveis-${bundle.target}" }
+        - { name: experimento, default: "${resources.experiments.radar_experimento.name}" }
+      tasks:
+        - task_key: governanca_funcoes
+          notebook_task:
+            notebook_path: ../src/governance/01_funcoes_governanca.py
+
+        - task_key: gerar_dados_sinteticos
+          depends_on: [{ task_key: governanca_funcoes }]
+          notebook_task:
+            notebook_path: ../src/data_gen/gerar_dados.py
+
+        - task_key: lakeflow_pipeline
+          depends_on: [{ task_key: gerar_dados_sinteticos }]
+          pipeline_task:
+            pipeline_id: ${resources.pipelines.radar_pipeline.id}
+            # os arquivos são regerados com o mesmo nome → reprocessa tudo
+            full_refresh: true
+
+        - task_key: ml_treinar_e_pontuar
+          depends_on: [{ task_key: lakeflow_pipeline }]
+          notebook_task:
+            notebook_path: ../src/ml/treinar_e_pontuar.py
+
+        - task_key: genai_alertas
+          depends_on: [{ task_key: ml_treinar_e_pontuar }]
+          notebook_task:
+            notebook_path: ../src/genai/gerar_alertas.py
+
+        - task_key: governanca_tags_e_acessos
+          depends_on: [{ task_key: genai_alertas }]
+          notebook_task:
+            notebook_path: ../src/governance/02_tags_e_permissoes.py
+
+        - task_key: lakebase_publicar
+          depends_on: [{ task_key: genai_alertas }]
+          notebook_task:
+            notebook_path: ../src/lakebase/sincronizar_lakebase.py
